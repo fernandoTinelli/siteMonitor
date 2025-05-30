@@ -21,7 +21,7 @@ class Monitor {
         this.pingIndex++
 
         this.outputer.clear()
-        this.outputer.writeLine(`Verificando (${this.pingIndex})`)
+        this.outputer.write(`Verificando (${this.pingIndex})`)
 
         fetch(`http://localhost:3000/ping?url=${this.url}`)
             .then(response => response.text())
@@ -30,7 +30,7 @@ class Monitor {
     }
 
     #onDone(html) {
-        this.outputer.write(`...OK`)
+        this.outputer.writeLine(`...OK`)
 
         const content = this.#getContent(html)
 

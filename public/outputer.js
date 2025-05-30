@@ -11,7 +11,7 @@ class Outputer {
 
     writeLine(text) {
         const el = this.#getOutputer()
-        el.value = el.value + '\n' + text
+        el.value = el.value + text + '\n'
     }
 
     clear() {
