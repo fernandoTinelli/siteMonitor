@@ -26,7 +26,7 @@
         <div class="flex items-center bg-red-400 text-white px-4 py-3 rounded shadow-md space-x-4 max-w-md">
             <span id="alertaMensagem" class="flex-grow font-semibold"></span>
             <button id="alertaFechar" class="text-white font-bold hover:text-red-100 ml-2" aria-label="Fechar alerta">
-                &times
+                &times;
             </button>
         </div>
     </div>
@@ -42,6 +42,12 @@
             </button>
         </div>
 
+        <!-- Input para tempo padrão em minutos -->
+        <label for="defaultTimeInput" class="block mb-2 font-semibold text-gray-700 dark:text-gray-300">Tempo padrão
+            (minutos):</label>
+        <input id="defaultTimeInput" type="number" min="1" max="60" value="1"
+            class="w-full mb-4 rounded-2xl p-3 text-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-200 shadow-md focus:border-blue-600 focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all duration-300" />
+
         <div id="spinner" class="flex flex-col items-center justify-center mb-4 space-y-2 hidden">
             <div class="flex items-center space-x-2">
                 <svg class="animate-spin h-6 w-6 text-blue-600 dark:text-blue-400" xmlns="http://www.w3.org/2000/svg"
@@ -53,7 +59,7 @@
                 </svg>
                 <span class="text-blue-600 dark:text-blue-400 font-semibold">Monitorando...</span>
             </div>
-            
+
             <div id="timer" class="text-gray-700 dark:text-gray-300 font-mono text-lg flex items-center space-x-1">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-600 dark:text-gray-300" fill="none"
                     viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
@@ -65,7 +71,7 @@
         </div>
 
         <label for="outputArea" class="block mb-2 font-semibold text-gray-700 dark:text-gray-300">Saída:</label>
-        <textarea id="outputArea" readonly rows="6"
+        <textarea id="outputArea" readonly rows="4"
             class="w-full p-4 border border-gray-300 dark:border-gray-600 rounded-xl bg-gradient-to-tr from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 dark:text-gray-200 font-mono shadow-md focus:outline-none focus:ring-4 focus:ring-blue-400 focus:ring-opacity-50 resize-none transition duration-300"></textarea>
     </div>
 
@@ -79,6 +85,9 @@
         const alertaFechar = document.getElementById('alertaFechar')
         const spinner = document.getElementById('spinner')
         const timerElem = document.getElementById('timerText')
+        const urlInput = document.getElementById('urlInput')
+        const defaultTimeInput = document.getElementById('defaultTimeInput')
+        const monitorarBtn = document.getElementById('monitorarBtn')
 
         let monitor = null
         let monitoramentoTimeout = null
@@ -101,43 +110,92 @@
             alertaContainer.classList.add('hidden')
         })
 
-        function mostrarAlerta(mensagem) {
-            // Interrompe monitoramento e timer
-            if (monitoramentoTimeout) {
-                clearTimeout(monitoramentoTimeout)
-                monitoramentoTimeout = null
+        document.addEventListener('keydown', e => {
+            if (e.key === 'Escape' && !alertaContainer.classList.contains('hidden')) {
+                alertaContainer.classList.add('hidden')
             }
+        })
 
-            if (timerInterval) {
-                clearInterval(timerInterval)
-                timerInterval = null
+        urlInput.addEventListener('input', () => {
+            const url = urlInput.value.trim()
+            try {
+                new URL(url)
+                urlInput.classList.remove('border-red-500')
+                urlInput.classList.add('border-green-500')
+            } catch {
+                urlInput.classList.remove('border-green-500')
+                urlInput.classList.add('border-red-500')
             }
+        })
 
-            spinner.classList.add('hidden')
-            timerElem.textContent = ''
+        // Copy on click and show mensagem azul
+        urlInput.addEventListener('click', () => {
+            if (urlInput.value !== '') {
+                urlInput.select()
+                try {
+                    navigator.clipboard.writeText(urlInput.value)
+                    mostrarMensagem('URL copiada para a área de transferência!')
+                } catch (err) {
+                    mostrarMensagem('Não foi possível copiar a URL')
+                }
+            }
+        })
 
-            alertaMensagem.textContent = mensagem
-            alertaContainer.classList.remove('hidden')
+        window.onload = () => {
+            urlInput.focus()
         }
 
-        // Função para iniciar timer decrescente (mm:ss)
-        function startTimer(tempo) {
-            // Para timer anterior se existir
-            if (timerInterval) {
-                clearInterval(timerInterval)
-                timerInterval = null
-            }
+        function habilitarBotao() {
+            monitorarBtn.disabled = false
+            monitorarBtn.classList.remove('opacity-50', 'cursor-not-allowed')
+            monitorarBtn.classList.add('hover:bg-blue-700')
+        }
 
-            // Parse tempo mm:ss
+        function desabilitarBotao() {
+            monitorarBtn.disabled = true
+            monitorarBtn.classList.add('opacity-50', 'cursor-not-allowed')
+            monitorarBtn.classList.remove('hover:bg-blue-700')
+        }
+
+        function mostrarAlerta(mensagem) {
+            mostrarPopup(mensagem, 'red')
+        }
+
+        function mostrarMensagem(mensagem) {
+            mostrarPopup(mensagem, 'blue')
+        }
+
+        function mostrarPopup(mensagem, tipo) {
+            alertaMensagem.textContent = mensagem
+            alertaContainer.classList.remove('hidden')
+
+            const divInterna = alertaContainer.querySelector('div')
+            divInterna.classList.remove('bg-red-400', 'bg-blue-500')
+
+            if (tipo === 'red') {
+                if (monitoramentoTimeout) clearTimeout(monitoramentoTimeout)
+                if (timerInterval) clearInterval(timerInterval)
+
+                spinner.classList.add('hidden')
+                timerElem.textContent = ''
+
+                divInterna.classList.add('bg-red-400')
+                habilitarBotao()
+            } else if (tipo === 'blue') {
+                divInterna.classList.add('bg-blue-500')
+                // Para mensagem azul não habilita botão automaticamente, mantenha controle separado se quiser
+            }
+        }
+
+        function startTimer(tempo) {
+            if (timerInterval) clearInterval(timerInterval)
             const parts = tempo.split(':')
-            let totalSegundos = 0
-            if (parts.length === 2) {
-                totalSegundos = parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10)
-            } else {
+            if (parts.length !== 2) {
                 timerElem.textContent = ''
                 return
             }
 
+            let totalSegundos = parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10)
             timerElem.textContent = formatarTempo(totalSegundos)
 
             timerInterval = setInterval(() => {
@@ -159,21 +217,24 @@
         }
 
         function monitorar() {
-            const urlInput = document.getElementById('urlInput')
             const url = urlInput.value.trim()
+            let defaultTimeMin = parseInt(defaultTimeInput.value, 10)
 
             if (!url) {
                 mostrarAlerta('Por favor, insira uma URL')
                 return
             }
 
-            // Interrompe monitoramento anterior se existir
+            if (isNaN(defaultTimeMin) || defaultTimeMin < 1 || defaultTimeMin > 60) {
+                mostrarAlerta('Informe um tempo padrão válido (entre 1 e 60 minutos)')
+                return
+            }
+
             if (monitoramentoTimeout) {
                 clearTimeout(monitoramentoTimeout)
                 monitoramentoTimeout = null
             }
 
-            // Para timer anterior
             if (timerInterval) {
                 clearInterval(timerInterval)
                 timerInterval = null
@@ -186,9 +247,14 @@
             monitor = new Monitor(
                 url,
                 new Outputer('outputArea', mostrarAlerta),
-                startTimer
+                startTimer,
+                defaultTimeMin,
+                1,
+                4
             )
             monitor.start()
+
+            desabilitarBotao()
         }
     </script>
 </body>
