@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Monitor SEI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+        }
+    </script>
+</head>
+
+<body
+    class="bg-gray-100 dark:bg-gray-900 flex items-center justify-center min-h-screen transition-colors duration-300 relative">
+
+    <button id="themeToggle" aria-label="Alternar tema claro/escuro"
+        class="fixed top-4 right-4 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-full p-2 shadow hover:bg-gray-300 dark:hover:bg-gray-600 transition z-50"
+        title="Alternar tema claro/escuro">
+        🌙
+    </button>
+
+    <div id="alertaContainer" class="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 hidden">
+        <div class="flex items-center bg-red-400 text-white px-4 py-3 rounded shadow-md space-x-4 max-w-md">
+            <span id="alertaMensagem" class="flex-grow font-semibold"></span>
+            <button id="alertaFechar" class="text-white font-bold hover:text-red-100 ml-2" aria-label="Fechar alerta">
+                &times
+            </button>
+        </div>
+    </div>
+
+    <div class="bg-white dark:bg-gray-800 p-8 rounded shadow-md w-full max-w-md transition-colors duration-300">
+        <label for="urlInput" class="block mb-2 font-semibold text-gray-700 dark:text-gray-300">URL SEI:</label>
+        <div class="flex space-x-2 mb-4">
+            <input id="urlInput" type="url" placeholder="https://example.com"
+                class="flex-grow p-2 border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-gray-200" />
+            <button id="monitorarBtn" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
+                onclick="monitorar()">
+                Monitorar
+            </button>
+        </div>
+
+        <div id="spinner" class="flex flex-col items-center justify-center mb-4 space-y-2 hidden">
+            <div class="flex items-center space-x-2">
+                <svg class="animate-spin h-6 w-6 text-blue-600 dark:text-blue-400" xmlns="http://www.w3.org/2000/svg"
+                    fill="none" viewBox="0 0 24 24" aria-hidden="true">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4">
+                    </circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z">
+                    </path>
+                </svg>
+                <span class="text-blue-600 dark:text-blue-400 font-semibold">Monitorando...</span>
+            </div>
+            
+            <div id="timer" class="text-gray-700 dark:text-gray-300 font-mono text-lg flex items-center space-x-1">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-600 dark:text-gray-300" fill="none"
+                    viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round"
+                        d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span id="timerText">00:00</span>
+            </div>
+        </div>
+
+        <label for="outputArea" class="block mb-2 font-semibold text-gray-700 dark:text-gray-300">Saída:</label>
+        <textarea id="outputArea" readonly rows="6"
+            class="w-full p-4 border border-gray-300 dark:border-gray-600 rounded-xl bg-gradient-to-tr from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 dark:text-gray-200 font-mono shadow-md focus:outline-none focus:ring-4 focus:ring-blue-400 focus:ring-opacity-50 resize-none transition duration-300"></textarea>
+    </div>
+
+    <script src="outputer.js"></script>
+    <script src="monitor.js"></script>
+    <script>
+        const themeToggleBtn = document.getElementById('themeToggle')
+        const htmlElement = document.documentElement
+        const alertaContainer = document.getElementById('alertaContainer')
+        const alertaMensagem = document.getElementById('alertaMensagem')
+        const alertaFechar = document.getElementById('alertaFechar')
+        const spinner = document.getElementById('spinner')
+        const timerElem = document.getElementById('timerText')
+
+        let monitor = null
+        let monitoramentoTimeout = null
+        let timerInterval = null
+
+        // Config tema dark
+        if (localStorage.getItem('temaEscuro') === 'true') {
+            htmlElement.classList.add('dark')
+            themeToggleBtn.textContent = '☀️'
+        }
+
+        themeToggleBtn.addEventListener('click', () => {
+            htmlElement.classList.toggle('dark')
+            const temaAtivo = htmlElement.classList.contains('dark')
+            localStorage.setItem('temaEscuro', temaAtivo)
+            themeToggleBtn.textContent = temaAtivo ? '☀️' : '🌙'
+        })
+
+        alertaFechar.addEventListener('click', () => {
+            alertaContainer.classList.add('hidden')
+        })
+
+        function mostrarAlerta(mensagem) {
+            // Interrompe monitoramento e timer
+            if (monitoramentoTimeout) {
+                clearTimeout(monitoramentoTimeout)
+                monitoramentoTimeout = null
+            }
+
+            if (timerInterval) {
+                clearInterval(timerInterval)
+                timerInterval = null
+            }
+
+            spinner.classList.add('hidden')
+            timerElem.textContent = ''
+
+            alertaMensagem.textContent = mensagem
+            alertaContainer.classList.remove('hidden')
+        }
+
+        // Função para iniciar timer decrescente (mm:ss)
+        function startTimer(tempo) {
+            // Para timer anterior se existir
+            if (timerInterval) {
+                clearInterval(timerInterval)
+                timerInterval = null
+            }
+
+            // Parse tempo mm:ss
+            const parts = tempo.split(':')
+            let totalSegundos = 0
+            if (parts.length === 2) {
+                totalSegundos = parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10)
+            } else {
+                timerElem.textContent = ''
+                return
+            }
+
+            timerElem.textContent = formatarTempo(totalSegundos)
+
+            timerInterval = setInterval(() => {
+                totalSegundos--
+                if (totalSegundos < 0) {
+                    clearInterval(timerInterval)
+                    timerInterval = null
+                    timerElem.textContent = ''
+                    return
+                }
+                timerElem.textContent = formatarTempo(totalSegundos)
+            }, 1000)
+        }
+
+        function formatarTempo(segundos) {
+            const m = Math.floor(segundos / 60)
+            const s = segundos % 60
+            return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
+        }
+
+        function monitorar() {
+            const urlInput = document.getElementById('urlInput')
+            const url = urlInput.value.trim()
+
+            if (!url) {
+                mostrarAlerta('Por favor, insira uma URL')
+                return
+            }
+
+            // Interrompe monitoramento anterior se existir
+            if (monitoramentoTimeout) {
+                clearTimeout(monitoramentoTimeout)
+                monitoramentoTimeout = null
+            }
+
+            // Para timer anterior
+            if (timerInterval) {
+                clearInterval(timerInterval)
+                timerInterval = null
+                timerElem.textContent = ''
+            }
+
+            spinner.classList.remove('hidden')
+            alertaContainer.classList.add('hidden') // esconde alerta se estiver visível
+
+            monitor = new Monitor(
+                url,
+                new Outputer('outputArea', mostrarAlerta),
+                startTimer
+            )
+            monitor.start()
+        }
+    </script>
+</body>
+
+</html>
